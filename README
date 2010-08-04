@@ -1,0 +1,22 @@
+This is Maven Embedder plugin for Gradle. It retrieves project information from pom.xml and configures Gradle accordingly.
+
+WARNING: There is a conflict between this plugin Maven3 dependency and maven plugin Maven2 dependency.
+Delete $GRADLE_HOME/lib/maven-ant-tasks-2.1.0.jar and don't use maven plugin in your build.
+
+Features list:
+---------------------------
+* Applying plugins for packagings: jar, war
+* Dependencies in compile, provided (exc. war) and test scopes
+* Maven repositories
+
+TODO list:
+------------------------------
+* Exclusions for dependencies
+* Support for reactor (multimodule)
+* Turn on transitivity for compile scope
+* Add project, groupId and artifactId in uploadArchives
+* Add source packaging if source-plugin present
+* Add deployment in uploadArchives
+* Packagings: pom, ejb, ear, ?
+* Provided scope in war
+* Apply maven plugin once classpath issue will be solved

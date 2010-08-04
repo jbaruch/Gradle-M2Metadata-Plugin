@@ -1,0 +1,79 @@
+//buildscript {
+//  repositories {
+//    mavenRepo urls: 'http://gradle.artifactoryonline.com/gradle/plugins'
+//  }
+//  dependencies {
+//    classpath "org.gradle.plugins:gradle-idea-plugin:0.3"
+//  }
+//}
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'idea'
+
+group = 'org.gradle.plugins'
+version = '0.1'
+
+sourceCompatibility = 1.5
+targetCompatibility = 1.5
+
+configurations {
+  deployerJars
+}
+
+task sourcesJar(type: Jar, dependsOn: compileJava) {
+  from sourceSets.main.allSource
+  classifier = 'sources'
+}
+
+artifacts {
+  archives sourcesJar
+}
+
+uploadArchives {
+  repositories.mavenDeployer {
+    configuration = configurations.deployerJars
+    pom.artifactId = 'gradle-mavenembedder-plugin'
+    repository(url: "http://repo.jfrog.org/artifactory/gradle-release-local") {
+      authentication(userName: "jbaruch", password: 'qrn%H*3DKJ4tey3')
+    }
+  }
+}
+
+repositories {
+  mavenRepo urls: ["http://repo.jfrog.org/artifactory/libs-releases"]
+  mavenRepo urls: ["http://repo.jfrog.org/artifactory/libs-snapshots"]
+}
+dependencies {
+  compile "org.apache.maven:maven-core:3.0-beta-1"
+  compile "org.apache.maven:maven-model:3.0-beta-1"
+  compile "org.apache.maven:maven-artifact:3.0-beta-1"
+  compile "org.apache.maven:maven-model-builder:3.0-beta-1"
+  compile "org.apache.maven:maven-compat:3.0-beta-1"
+  compile "org.codehaus.plexus:plexus-container-default:1.5.4"
+  compile "org.codehaus.plexus:plexus-classworlds:2.2.3"
+  compile "org.gradle:gradle-plugins:0.9-preview-3"
+  compile "org.codehaus.groovy:groovy-all:1.7.4"
+  compile "com.google.guava:guava:r06"
+  compile "org.gradle:gradle-core:0.9-preview-3"
+  compile "org.apache.ivy:ivy:2.1.0"
+  compile "org.slf4j:slf4j-api:1.6.0"
+}
+
+task replacePoms(dependsOn: install) << {
+  def pomsDir = new File(project.buildDir, "poms")
+  def defaultPomName = "pom-default.xml"
+  def defaultPom = new File(pomsDir, defaultPomName)
+  if (defaultPom.exists()) {
+    File pomFile = new File(project.projectDir, "pom.xml")
+    if (pomFile.exists()) {
+      pomFile.renameTo(new File(project.projectDir, "pom.xml.bak"))
+    }
+    project.copy {
+      from(pomsDir) {
+        include defaultPomName
+        rename defaultPomName, 'pom.xml'
+      }
+      into(project.projectDir)
+    }
+  }
+}
