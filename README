@@ -8,9 +8,9 @@ Features list:
 * Applying plugins for packagings: jar, war
 * Dependencies in compile, provided (exc. war) and test scopes
 * Exclusions for dependencies
-* Maven repositories
+* Maven repositories (both from pom.xml and profiles in settings.xml)
 * Turn on transitivity for compile scope
-* Add project, groupId
+* Add project version, groupId and status (SNAPSHOT/release)
 * Java compiler source and target levels
 
 TODO list:
