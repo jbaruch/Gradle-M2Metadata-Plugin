@@ -1,11 +1,3 @@
-//buildscript {
-//  repositories {
-//    mavenRepo urls: 'http://gradle.artifactoryonline.com/gradle/plugins'
-//  }
-//  dependencies {
-//    classpath "org.gradle.plugins:gradle-idea-plugin:0.3"
-//  }
-//}
 apply plugin: 'java'
 //apply plugin: 'maven'
 apply plugin: 'idea'
