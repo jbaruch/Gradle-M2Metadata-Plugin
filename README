@@ -7,14 +7,16 @@ Features list:
 ---------------------------
 * Applying plugins for packagings: jar, war
 * Dependencies in compile, provided (exc. war) and test scopes
+* Exclusions for dependencies
 * Maven repositories
+* Turn on transitivity for compile scope
+* Add project, groupId
+* Java compiler source and target levels
 
 TODO list:
 ------------------------------
-* Exclusions for dependencies
 * Support for reactor (multimodule)
-* Turn on transitivity for compile scope
-* Add project, groupId and artifactId in uploadArchives
+* Add artifactId in uploadArchives
 * Add source packaging if source-plugin present
 * Add deployment in uploadArchives
 * Packagings: pom, ejb, ear, ?
