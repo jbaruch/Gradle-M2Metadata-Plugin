@@ -12,13 +12,17 @@ Features list:
 * Turn on transitivity for compile scope
 * Add project version, groupId and status (SNAPSHOT/release)
 * Java compiler source and target levels
+* Add source packaging if source-plugin present
 
 TODO list:
 ------------------------------
 * Support for reactor (multimodule)
-* Add artifactId in uploadArchives
-* Add source packaging if source-plugin present
-* Add deployment in uploadArchives
 * Packagings: pom, ejb, ear, ?
 * Provided scope in war
-* Apply maven plugin once classpath issue will be solved
+* Add maven artifactId in uploadArchives*
+* Add deployment to maven repo in uploadArchives*
+* Apply maven plugin*
+
+
+-------
+*once classpath issue will be solved

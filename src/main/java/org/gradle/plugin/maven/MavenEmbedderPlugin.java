@@ -37,8 +37,12 @@ import org.gradle.api.Project;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
+import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact;
 import org.gradle.api.internal.project.AbstractProject;
+import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.bundling.Jar;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,6 +50,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.gradle.api.artifacts.Dependency.ARCHIVES_CONFIGURATION;
 
 /**
  * Created by IntelliJ IDEA.
@@ -56,6 +62,12 @@ import java.util.Properties;
 public class MavenEmbedderPlugin implements Plugin<Project> {
 
     private static final String MAVEN_COMPILER_PLUGIN_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
+    private static final String MAVEN_SOURCE_PLUGIN_KEY = "org.apache.maven.plugins:maven-source-plugin";
+    private static final String SOURCES_CLASSIFIER = "sources";
+    private static final String SOURCES_JAR_TASK_NAME = "sourcesJar";
+    private static final String SOURCE_LEVEL_COMPILE_PLUGIN_SETTING = "source";
+    private static final String TARGET_LEVEL_COMPILE_PLUGIN_SETTING = "target";
+    private static final String JAVA_PLUGIN_CONVENTION_NAME = "java";
     private File defaultUserSettingsFile;
     private File defaultGlobalSettingsFile;
 
@@ -65,7 +77,7 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
     private DefaultPlexusContainer container;
 
     public enum Packaging {
-        JAR("jar", "java"), WAR("war", "war");
+        JAR("jar", JAVA_PLUGIN_CONVENTION_NAME), WAR("war", "war");
         private String mavenPackaging;
         private String gradlePlugin;
 
@@ -133,14 +145,43 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
             readMavenProject();
             project.getLogger().lifecycle("Configuring general settings...");
             configureSettings();
-            project.getLogger().lifecycle("Applying plugins according to packaging type...");
-            applyPlugins();
+            project.getLogger().lifecycle("Applying Gradle plugins according to packaging type...");
+            applyGradlePlugins();
+            project.getLogger().lifecycle("Applying known Maven plugins...");
+            applyMavenPlugins();
             project.getLogger().lifecycle("Applying Maven repositories...");
             addRepositorties();
             project.getLogger().lifecycle("Adding project dependencies...");
             addDependencies();
         } catch (Exception e) {
             throw new GradleException("failed to read Maven project", e);
+        }
+    }
+
+    private void applyMavenPlugins() {
+        JavaPluginConvention javaConvention = (JavaPluginConvention) project.getConvention().getPlugins().get(JAVA_PLUGIN_CONVENTION_NAME);
+        if (javaConvention != null) {
+            org.apache.maven.model.Plugin mavenCompilerPlugin = mavenProject.getPlugin(MAVEN_COMPILER_PLUGIN_KEY);
+            Xpp3Dom configuration = (Xpp3Dom) mavenCompilerPlugin.getConfiguration();
+            Xpp3Dom source = configuration.getChild(SOURCE_LEVEL_COMPILE_PLUGIN_SETTING);
+            if (source != null) {
+                javaConvention.setSourceCompatibility(source.getValue());
+
+            }
+            Xpp3Dom target = configuration.getChild(TARGET_LEVEL_COMPILE_PLUGIN_SETTING);
+            if (target != null) {
+                javaConvention.setTargetCompatibility(target.getValue());
+            }
+
+            org.apache.maven.model.Plugin mavenSourcePlugin = mavenProject.getPlugin(MAVEN_SOURCE_PLUGIN_KEY);
+            if (mavenSourcePlugin != null) {
+                Jar sourcesJar = project.getTasks().add(SOURCES_JAR_TASK_NAME, Jar.class);
+                sourcesJar.setDescription("Generates a  jar archive with all the source classes.");
+                sourcesJar.dependsOn(project.getTasksByName(JavaPlugin.COMPILE_JAVA_TASK_NAME, false));
+                sourcesJar.setClassifier(SOURCES_CLASSIFIER);
+                sourcesJar.from(javaConvention.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getAllSource());
+                project.getConfigurations().getByName(ARCHIVES_CONFIGURATION).addArtifact(new ArchivePublishArtifact(sourcesJar));
+            }
         }
     }
 
@@ -174,28 +215,10 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         }
     }
 
-    private void applyPlugins() {
+    private void applyGradlePlugins() {
 //    TODO    project.apply(ImmutableMap.<String, String>of("plugin", "maven")); - can't do it because Maven2 dependencies in gradle classloader
         Packaging packaging = Packaging.parseMavenPackaging(mavenProject.getPackaging());
         project.apply(ImmutableMap.<String, String>of("plugin", packaging.getGradlePlugin()));
-        JavaPluginConvention javaConvention = (JavaPluginConvention) project.getConvention().getPlugins().get("java");
-        if (javaConvention != null) {
-            configureJavaCompiler(javaConvention);
-        }
-    }
-
-    private void configureJavaCompiler(JavaPluginConvention javaConvention) {
-        org.apache.maven.model.Plugin mavenCompilerPlugin = mavenProject.getPlugin(MAVEN_COMPILER_PLUGIN_KEY);
-        Xpp3Dom configuration = (Xpp3Dom) mavenCompilerPlugin.getConfiguration();
-        Xpp3Dom source = configuration.getChild("source");
-        if (source != null) {
-            javaConvention.setSourceCompatibility(source.getValue());
-
-        }
-        Xpp3Dom target = configuration.getChild("target");
-        if (target != null) {
-            javaConvention.setTargetCompatibility(target.getValue());
-        }
     }
 
     private void addDependencies() {
