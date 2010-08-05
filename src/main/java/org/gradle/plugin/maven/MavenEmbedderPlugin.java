@@ -1,6 +1,7 @@
 package org.gradle.plugin.maven;
 
 import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import org.apache.maven.artifact.Artifact;
@@ -13,9 +14,11 @@ import org.apache.maven.execution.MavenExecutionRequestPopulationException;
 import org.apache.maven.execution.MavenExecutionRequestPopulator;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Exclusion;
+import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.Repository;
 import org.apache.maven.model.building.ModelBuildingRequest;
 import org.apache.maven.plugin.*;
+import org.apache.maven.plugin.clean.CleanMojo;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
@@ -33,11 +36,13 @@ import org.codehaus.plexus.DefaultPlexusContainer;
 import org.codehaus.plexus.PlexusContainerException;
 import org.codehaus.plexus.classworlds.ClassWorld;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
+import org.codehaus.plexus.configuration.PlexusConfigurationException;
 import org.codehaus.plexus.util.cli.CommandLineUtils;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
@@ -50,12 +55,11 @@ import org.gradle.api.tasks.bundling.Jar;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.net.URISyntaxException;
+import java.util.*;
 
 import static com.google.common.collect.ImmutableMap.of;
+import static com.google.common.collect.Iterables.find;
 import static org.gradle.api.artifacts.Dependency.ARCHIVES_CONFIGURATION;
 
 
@@ -113,36 +117,21 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         }
     }
 
-    private void joinTasks() throws ComponentLookupException, ArtifactResolutionException, PluginManagerException, InvalidDependencyVersionException, MojoExecutionException, ArtifactNotFoundException, MojoFailureException, PluginConfigurationException, InvalidPluginDescriptorException, PluginDescriptorParsingException, MojoNotFoundException, PluginNotFoundException, PluginResolutionException, InvalidRepositoryException, IOException {
-//        project.getConfigurations().getByName("classpath").getAllDependencies();
-//
-//
-//        org.apache.maven.model.Plugin cleanPlugin = mavenProject.getPlugin(MAVEN_CLEAN_PLUGIN_KEY);
-//        List<PluginExecution> executions = cleanPlugin.getExecutions();
-//        try {
-//            PluginExecution cleanExecution = find(executions, new Predicate<PluginExecution>() {
-//                public boolean apply(PluginExecution input) {
-//                    return input.getPhase().equals(MAVEN_CLEAN_PHASE);
-//                }
-//            });
-//            MavenExecutionResult result = new DefaultMavenExecutionResult();
-//            result.setProject(mavenProject);
-//            MavenSession session = new MavenSession(container, executionRequest, result);
-//            JarFile pluginJar = new JarFile(pluginFile, false);
-//            try {
-//                ZipEntry pluginDescriptorEntry = pluginJar.getEntry("META-INF/maven/plugin.xml");
-//                InputStream is = pluginJar.getInputStream(pluginDescriptorEntry);
-//                PluginDescriptor pluginDescriptor = parsePluginDescriptor(is, cleanPlugin, pluginFile.getAbsolutePath());
-//                MavenPluginManager mavenPluginManager = (MavenPluginManager) container.lookup(MavenPluginManager.class.getName());
-//                MojoExecution mojoExecution = new MojoExecution(cleanPlugin, MAVEN_CLEAN_GOAL, cleanExecution.getId());
-//                mojoExecution.setMojoDescriptor(pluginDescriptor.getMojo(MAVEN_CLEAN_GOAL));
-//                CleanMojo mojo = mavenPluginManager.getConfiguredMojo(CleanMojo.class, session, mojoExecution);
-//                mojo.execute();
-//            } finally {
-//                pluginJar.close();
-//            }
-//        } catch (NoSuchElementException ignored) {
-//        }
+    private void joinTasks() throws ComponentLookupException, ArtifactResolutionException, PluginManagerException, InvalidDependencyVersionException, MojoExecutionException, ArtifactNotFoundException, MojoFailureException, PluginConfigurationException, InvalidPluginDescriptorException, PluginDescriptorParsingException, MojoNotFoundException, PluginNotFoundException, PluginResolutionException, InvalidRepositoryException, IOException, URISyntaxException, PlexusConfigurationException, InstantiationException, IllegalAccessException {
+        org.apache.maven.model.Plugin cleanPlugin = mavenProject.getPlugin(MAVEN_CLEAN_PLUGIN_KEY);
+        List<PluginExecution> executions = cleanPlugin.getExecutions();
+        try {
+            PluginExecution cleanExecution = find(executions, new Predicate<PluginExecution>() {
+                public boolean apply(PluginExecution input) {
+                    return input.getPhase().equals(MAVEN_CLEAN_PHASE);
+                }
+            });
+            Task cleanTask = project.getTasks().findByName("clean");
+            if (cleanTask != null) {
+                cleanTask.doLast(new MavenMojoRunner(container, CleanMojo.class, cleanPlugin, cleanExecution, MAVEN_CLEAN_GOAL, mavenProject, executionRequest));
+            }
+        } catch (NoSuchElementException ignored) {
+        }
     }
 
     private void applyMavenPlugins() {
@@ -204,7 +193,10 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
 
     private void applyGradlePlugins() {
 //    TODO    project.apply(of("plugin", "maven")); - can't do it because Maven2 dependencies in gradle classloader
-        project.apply(of("plugin", ObjectConverter.packaging2Plugin(mavenProject.getPackaging())));
+        String pluginName = ObjectConverter.packaging2Plugin(mavenProject.getPackaging());
+        if (pluginName != null) {
+            project.apply(of("plugin", pluginName));
+        }
     }
 
     private void addDependencies() {
@@ -239,7 +231,7 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         populator.populateDefaults(executionRequest);
         ProjectBuildingRequest buildingRequest = executionRequest.getProjectBuildingRequest();
         buildingRequest.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL);
-        mavenProject = builder.build(new File("pom.xml"), buildingRequest).getProject();
+        mavenProject = builder.build(new File(project.getProjectDir(), "pom.xml"), buildingRequest).getProject();
     }
 
     private void buildContainer() throws PlexusContainerException {
