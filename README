@@ -6,7 +6,7 @@ Delete $GRADLE_HOME/lib/maven-ant-tasks-2.1.0.jar and don't use maven plugin in 
 Features list:
 ---------------------------
 * Applying plugins for packagings: jar, war
-* Dependencies in compile, provided (exc. war) and test scopes
+* Dependencies in compile, provided and test scopes
 * Exclusions for dependencies
 * Maven repositories (both from pom.xml and profiles in settings.xml)
 * Turn on transitivity for compile scope
@@ -16,9 +16,7 @@ Features list:
 
 TODO list:
 ------------------------------
-* Support for reactor (multimodule)
 * Packagings: pom, ejb, ear, ?
-* Provided scope in war
 * Add maven artifactId in uploadArchives*
 * Add deployment to maven repo in uploadArchives*
 * Apply maven plugin*

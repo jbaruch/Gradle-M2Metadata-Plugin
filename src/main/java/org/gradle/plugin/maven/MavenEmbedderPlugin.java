@@ -1,10 +1,12 @@
 package org.gradle.plugin.maven;
 
 import com.google.common.base.Function;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Multimaps;
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.InvalidRepositoryException;
+import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
+import org.apache.maven.artifact.resolver.ArtifactResolutionException;
 import org.apache.maven.execution.DefaultMavenExecutionRequest;
 import org.apache.maven.execution.MavenExecutionRequest;
 import org.apache.maven.execution.MavenExecutionRequestPopulationException;
@@ -13,10 +15,12 @@ import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.Repository;
 import org.apache.maven.model.building.ModelBuildingRequest;
+import org.apache.maven.plugin.*;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.project.ProjectBuilder;
 import org.apache.maven.project.ProjectBuildingException;
 import org.apache.maven.project.ProjectBuildingRequest;
+import org.apache.maven.project.artifact.InvalidDependencyVersionException;
 import org.apache.maven.project.artifact.ProjectArtifact;
 import org.apache.maven.settings.Settings;
 import org.apache.maven.settings.building.DefaultSettingsBuildingRequest;
@@ -51,7 +55,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static com.google.common.collect.ImmutableMap.of;
 import static org.gradle.api.artifacts.Dependency.ARCHIVES_CONFIGURATION;
+
 
 /**
  * Created by IntelliJ IDEA.
@@ -63,6 +69,7 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
 
     private static final String MAVEN_COMPILER_PLUGIN_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
     private static final String MAVEN_SOURCE_PLUGIN_KEY = "org.apache.maven.plugins:maven-source-plugin";
+    private static final String MAVEN_CLEAN_PLUGIN_KEY = "org.apache.maven.plugins:maven-clean-plugin";
     private static final String SOURCES_CLASSIFIER = "sources";
     private static final String SOURCES_JAR_TASK_NAME = "sourcesJar";
     private static final String SOURCE_LEVEL_COMPILE_PLUGIN_SETTING = "source";
@@ -73,66 +80,12 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
 
     private MavenProject mavenProject;
     private Project project;
-    private Settings settings;
+    private Settings mavenSettings;
     private DefaultPlexusContainer container;
-
-    public enum Packaging {
-        JAR("jar", JAVA_PLUGIN_CONVENTION_NAME), WAR("war", "war");
-        private String mavenPackaging;
-        private String gradlePlugin;
-
-        Packaging(String mavenPackaging, String gradlePlugin) {
-
-            this.mavenPackaging = mavenPackaging;
-            this.gradlePlugin = gradlePlugin;
-        }
-
-        public String getGradlePlugin() {
-            return gradlePlugin;
-        }
-
-        public String getMavenPackaging() {
-            return mavenPackaging;
-        }
-
-        public static Packaging parseMavenPackaging(String mavenPackaging) {
-            for (Packaging packaging : Packaging.values()) {
-                if (packaging.getMavenPackaging().equalsIgnoreCase(mavenPackaging)) {
-                    return packaging;
-                }
-            }
-            throw new GradleException("Failed to find packaging " + mavenPackaging);
-        }
-    }
-
-    public enum ConfigurationMapping {
-        COMPILE("compile", "compile"), TEST_COMPILE("test", "testCompile"), PROVIDED("provided", "compile");
-        //TODO map PROVIDED to "providedCompile" for war plugin only 
-        private String mavenScope;
-        private String gradleConfiguration;
-
-        ConfigurationMapping(String mavenScope, String gradleConfiguration) {
-            this.mavenScope = mavenScope;
-            this.gradleConfiguration = gradleConfiguration;
-        }
-
-        public String getGradleConfiguration() {
-            return gradleConfiguration;
-        }
-
-        public String getMavenScope() {
-            return mavenScope;
-        }
-
-        public static ConfigurationMapping parseScope(String mavenScope) {
-            for (ConfigurationMapping configurationMapping : ConfigurationMapping.values()) {
-                if (configurationMapping.getMavenScope().equalsIgnoreCase(mavenScope)) {
-                    return configurationMapping;
-                }
-            }
-            throw new GradleException("Failed to find scope " + mavenScope);
-        }
-    }
+    private static final String MAVEN_CLEAN_PHASE = "clean";
+    private MavenExecutionRequest executionRequest;
+    private static final String MAVEN_CLEAN_GOAL = "clean";
+    private static final String MAVEN_CLEAN_PLUGIN_PREFIX = "clean";
 
     public void apply(Project project) {
         this.project = project;
@@ -153,9 +106,43 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
             addRepositorties();
             project.getLogger().lifecycle("Adding project dependencies...");
             addDependencies();
+            project.getLogger().lifecycle("Joining common Maven tasks to build...");
+            joinTasks();
         } catch (Exception e) {
             throw new GradleException("failed to read Maven project", e);
         }
+    }
+
+    private void joinTasks() throws ComponentLookupException, ArtifactResolutionException, PluginManagerException, InvalidDependencyVersionException, MojoExecutionException, ArtifactNotFoundException, MojoFailureException, PluginConfigurationException, InvalidPluginDescriptorException, PluginDescriptorParsingException, MojoNotFoundException, PluginNotFoundException, PluginResolutionException, InvalidRepositoryException, IOException {
+//        project.getConfigurations().getByName("classpath").getAllDependencies();
+//
+//
+//        org.apache.maven.model.Plugin cleanPlugin = mavenProject.getPlugin(MAVEN_CLEAN_PLUGIN_KEY);
+//        List<PluginExecution> executions = cleanPlugin.getExecutions();
+//        try {
+//            PluginExecution cleanExecution = find(executions, new Predicate<PluginExecution>() {
+//                public boolean apply(PluginExecution input) {
+//                    return input.getPhase().equals(MAVEN_CLEAN_PHASE);
+//                }
+//            });
+//            MavenExecutionResult result = new DefaultMavenExecutionResult();
+//            result.setProject(mavenProject);
+//            MavenSession session = new MavenSession(container, executionRequest, result);
+//            JarFile pluginJar = new JarFile(pluginFile, false);
+//            try {
+//                ZipEntry pluginDescriptorEntry = pluginJar.getEntry("META-INF/maven/plugin.xml");
+//                InputStream is = pluginJar.getInputStream(pluginDescriptorEntry);
+//                PluginDescriptor pluginDescriptor = parsePluginDescriptor(is, cleanPlugin, pluginFile.getAbsolutePath());
+//                MavenPluginManager mavenPluginManager = (MavenPluginManager) container.lookup(MavenPluginManager.class.getName());
+//                MojoExecution mojoExecution = new MojoExecution(cleanPlugin, MAVEN_CLEAN_GOAL, cleanExecution.getId());
+//                mojoExecution.setMojoDescriptor(pluginDescriptor.getMojo(MAVEN_CLEAN_GOAL));
+//                CleanMojo mojo = mavenPluginManager.getConfiguredMojo(CleanMojo.class, session, mojoExecution);
+//                mojo.execute();
+//            } finally {
+//                pluginJar.close();
+//            }
+//        } catch (NoSuchElementException ignored) {
+//        }
     }
 
     private void applyMavenPlugins() {
@@ -204,21 +191,20 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         request.setGlobalSettingsFile(defaultGlobalSettingsFile);
         request.setUserSettingsFile(defaultUserSettingsFile);
         request.setSystemProperties(props);
-        this.settings = container.lookup(SettingsBuilder.class).build(request).getEffectiveSettings();
+        this.mavenSettings = container.lookup(SettingsBuilder.class).build(request).getEffectiveSettings();
     }
 
     private void addRepositorties() {
         List<Repository> mavenRepositories = mavenProject.getRepositories();
         RepositoryHandler repositoryHandler = project.getRepositories();
         for (Repository mavenRepository : mavenRepositories) {
-            repositoryHandler.mavenRepo(ImmutableMap.<String, String>of("name", mavenRepository.getId(), "urls", mavenRepository.getUrl()));
+            repositoryHandler.mavenRepo(of("name", mavenRepository.getId(), "urls", mavenRepository.getUrl()));
         }
     }
 
     private void applyGradlePlugins() {
-//    TODO    project.apply(ImmutableMap.<String, String>of("plugin", "maven")); - can't do it because Maven2 dependencies in gradle classloader
-        Packaging packaging = Packaging.parseMavenPackaging(mavenProject.getPackaging());
-        project.apply(ImmutableMap.<String, String>of("plugin", packaging.getGradlePlugin()));
+//    TODO    project.apply(of("plugin", "maven")); - can't do it because Maven2 dependencies in gradle classloader
+        project.apply(of("plugin", ObjectConverter.packaging2Plugin(mavenProject.getPackaging())));
     }
 
     private void addDependencies() {
@@ -231,13 +217,13 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         });
         ConfigurationContainer configurations = project.getConfigurations();
         for (String scope : dependenciesByScope.keySet()) {
-            org.gradle.api.artifacts.Configuration configuration = configurations.getByName(ConfigurationMapping.parseScope(scope).getGradleConfiguration());
+            org.gradle.api.artifacts.Configuration configuration = configurations.getByName(ObjectConverter.scope2Configuration(scope, mavenProject.getPackaging()));
             Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
             for (Dependency mavenDependency : scopeDependencies) {
                 DefaultExternalModuleDependency dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
                 List<Exclusion> exclusions = mavenDependency.getExclusions();
                 for (Exclusion exclusion : exclusions) {
-                    dependency.exclude(ImmutableMap.<String, String>of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
+                    dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
                 }
                 configuration.addDependency(dependency);
             }
@@ -247,9 +233,10 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
 
     private void readMavenProject() throws PlexusContainerException, ComponentLookupException, MavenExecutionRequestPopulationException, ProjectBuildingException, IOException, SettingsBuildingException {
         ProjectBuilder builder = container.lookup(ProjectBuilder.class);
-        MavenExecutionRequest executionRequest = new DefaultMavenExecutionRequest();
+        executionRequest = new DefaultMavenExecutionRequest();
         MavenExecutionRequestPopulator populator = container.lookup(MavenExecutionRequestPopulator.class);
-        populator.populateFromSettings(executionRequest, settings);
+        populator.populateFromSettings(executionRequest, mavenSettings);
+        populator.populateDefaults(executionRequest);
         ProjectBuildingRequest buildingRequest = executionRequest.getProjectBuildingRequest();
         buildingRequest.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL);
         mavenProject = builder.build(new File("pom.xml"), buildingRequest).getProject();
