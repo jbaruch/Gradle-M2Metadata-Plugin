@@ -2,16 +2,15 @@ package org.gradle.plugin.maven;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.Multimaps;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.artifact.InvalidRepositoryException;
 import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
 import org.apache.maven.artifact.resolver.ArtifactResolutionException;
-import org.apache.maven.execution.DefaultMavenExecutionRequest;
-import org.apache.maven.execution.MavenExecutionRequest;
-import org.apache.maven.execution.MavenExecutionRequestPopulationException;
-import org.apache.maven.execution.MavenExecutionRequestPopulator;
+import org.apache.maven.execution.*;
+import org.apache.maven.lifecycle.LifecycleNotFoundException;
+import org.apache.maven.lifecycle.LifecyclePhaseNotFoundException;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.PluginExecution;
@@ -19,10 +18,9 @@ import org.apache.maven.model.Repository;
 import org.apache.maven.model.building.ModelBuildingRequest;
 import org.apache.maven.plugin.*;
 import org.apache.maven.plugin.clean.CleanMojo;
-import org.apache.maven.project.MavenProject;
-import org.apache.maven.project.ProjectBuilder;
-import org.apache.maven.project.ProjectBuildingException;
-import org.apache.maven.project.ProjectBuildingRequest;
+import org.apache.maven.plugin.prefix.NoPluginFoundForPrefixException;
+import org.apache.maven.plugin.version.PluginVersionResolutionException;
+import org.apache.maven.project.*;
 import org.apache.maven.project.artifact.InvalidDependencyVersionException;
 import org.apache.maven.project.artifact.ProjectArtifact;
 import org.apache.maven.settings.Settings;
@@ -59,7 +57,8 @@ import java.net.URISyntaxException;
 import java.util.*;
 
 import static com.google.common.collect.ImmutableMap.of;
-import static com.google.common.collect.Iterables.find;
+import static com.google.common.collect.Iterables.*;
+import static com.google.common.collect.Multimaps.index;
 import static org.gradle.api.artifacts.Dependency.ARCHIVES_CONFIGURATION;
 
 
@@ -89,7 +88,8 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
     private static final String MAVEN_CLEAN_PHASE = "clean";
     private MavenExecutionRequest executionRequest;
     private static final String MAVEN_CLEAN_GOAL = "clean";
-    private static final String MAVEN_CLEAN_PLUGIN_PREFIX = "clean";
+    private MavenSession session;
+    private Iterable<MavenProject> reactorProjects;
 
     public void apply(Project project) {
         this.project = project;
@@ -118,6 +118,10 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
     }
 
     private void joinTasks() throws ComponentLookupException, ArtifactResolutionException, PluginManagerException, InvalidDependencyVersionException, MojoExecutionException, ArtifactNotFoundException, MojoFailureException, PluginConfigurationException, InvalidPluginDescriptorException, PluginDescriptorParsingException, MojoNotFoundException, PluginNotFoundException, PluginResolutionException, InvalidRepositoryException, IOException, URISyntaxException, PlexusConfigurationException, InstantiationException, IllegalAccessException {
+        joinClean();
+    }
+
+    private void joinClean() throws ComponentLookupException {
         org.apache.maven.model.Plugin cleanPlugin = mavenProject.getPlugin(MAVEN_CLEAN_PLUGIN_KEY);
         List<PluginExecution> executions = cleanPlugin.getExecutions();
         try {
@@ -128,7 +132,7 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
             });
             Task cleanTask = project.getTasks().findByName("clean");
             if (cleanTask != null) {
-                cleanTask.doLast(new MavenMojoRunner(container, CleanMojo.class, cleanPlugin, cleanExecution, MAVEN_CLEAN_GOAL, mavenProject, executionRequest));
+                cleanTask.doLast(new MavenMojoRunner(container, CleanMojo.class, cleanPlugin, cleanExecution, MAVEN_CLEAN_GOAL, session));
             }
         } catch (NoSuchElementException ignored) {
         }
@@ -199,10 +203,9 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         }
     }
 
-    private void addDependencies() {
-        project.getConfigurations().getByName("compile").setTransitive(true);
+    private void addDependencies() throws ComponentLookupException, InvalidPluginDescriptorException, PluginVersionResolutionException, PluginDescriptorParsingException, NoPluginFoundForPrefixException, MojoNotFoundException, PluginNotFoundException, PluginResolutionException, LifecyclePhaseNotFoundException, LifecycleNotFoundException {
         List<Dependency> dependencies = mavenProject.getDependencies();
-        Multimap<String, Dependency> dependenciesByScope = Multimaps.index(dependencies, new Function<Dependency, String>() {
+        Multimap<String, Dependency> dependenciesByScope = index(dependencies, new Function<Dependency, String>() {
             public String apply(Dependency from) {
                 return from.getScope();
             }
@@ -211,13 +214,21 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         for (String scope : dependenciesByScope.keySet()) {
             org.gradle.api.artifacts.Configuration configuration = configurations.getByName(ObjectConverter.scope2Configuration(scope, mavenProject.getPackaging()));
             Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
-            for (Dependency mavenDependency : scopeDependencies) {
-                DefaultExternalModuleDependency dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
-                List<Exclusion> exclusions = mavenDependency.getExclusions();
-                for (Exclusion exclusion : exclusions) {
-                    dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
+            for (final Dependency mavenDependency : scopeDependencies) {
+                if (!any(reactorProjects, new Predicate<MavenProject>() {
+                    public boolean apply(MavenProject input) {
+                        return (input.getGroupId().equals(mavenDependency.getGroupId()) &&
+                                input.getArtifactId().equals(mavenDependency.getArtifactId()) &&
+                                input.getVersion().equals(mavenDependency.getVersion()));
+                    }
+                })) {
+                    DefaultExternalModuleDependency dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
+                    List<Exclusion> exclusions = mavenDependency.getExclusions();
+                    for (Exclusion exclusion : exclusions) {
+                        dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
+                    }
+                    configuration.addDependency(dependency);
                 }
-                configuration.addDependency(dependency);
             }
         }
     }
@@ -232,6 +243,15 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         ProjectBuildingRequest buildingRequest = executionRequest.getProjectBuildingRequest();
         buildingRequest.setValidationLevel(ModelBuildingRequest.VALIDATION_LEVEL_MINIMAL);
         mavenProject = builder.build(new File(project.getProjectDir(), "pom.xml"), buildingRequest).getProject();
+        reactorProjects = transform(builder.build(ImmutableList.of(new File("pom.xml")), true, buildingRequest), new Function<ProjectBuildingResult, MavenProject>() {
+            public MavenProject apply(ProjectBuildingResult from) {
+                return from.getProject();
+            }
+        });
+        MavenExecutionResult result = new DefaultMavenExecutionResult();
+        result.setProject(mavenProject);
+        session = new MavenSession(container, executionRequest, result);
+        session.setCurrentProject(mavenProject);
     }
 
     private void buildContainer() throws PlexusContainerException {

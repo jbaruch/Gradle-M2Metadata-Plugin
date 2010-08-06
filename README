@@ -13,14 +13,19 @@ Features list:
 * Add project version, groupId and status (SNAPSHOT/release)
 * Java compiler source and target levels
 * Add source packaging if source-plugin present
+* Executes maven-clean-plugin after Gradle's Java plugin clean task
 
 TODO list:
 ------------------------------
+Bugs:
+* Fix test scope interproject dependencies
+
+Features:
 * Packagings: pom, ejb, ear, ?
+* Execute additional maven plugins with Gradle tasks. Which?
 * Add maven artifactId in uploadArchives*
 * Add deployment to maven repo in uploadArchives*
 * Apply maven plugin*
-
 
 -------
 *once classpath issue will be solved

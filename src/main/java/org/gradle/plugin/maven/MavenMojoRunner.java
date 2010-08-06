@@ -1,8 +1,5 @@
 package org.gradle.plugin.maven;
 
-import org.apache.maven.execution.DefaultMavenExecutionResult;
-import org.apache.maven.execution.MavenExecutionRequest;
-import org.apache.maven.execution.MavenExecutionResult;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.model.Plugin;
 import org.apache.maven.model.PluginExecution;
@@ -12,14 +9,15 @@ import org.apache.maven.plugin.MojoExecution;
 import org.apache.maven.plugin.descriptor.MojoDescriptor;
 import org.apache.maven.plugin.descriptor.PluginDescriptor;
 import org.apache.maven.plugin.descriptor.PluginDescriptorBuilder;
-import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.DefaultPlexusContainer;
 import org.codehaus.plexus.classworlds.ClassWorld;
 import org.codehaus.plexus.classworlds.realm.ClassRealm;
 import org.codehaus.plexus.component.configurator.ComponentConfigurator;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
+import org.codehaus.plexus.configuration.PlexusConfiguration;
 import org.codehaus.plexus.util.ReaderFactory;
 import org.codehaus.plexus.util.StringUtils;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.gradle.api.Action;
 import org.gradle.api.GradleException;
 import org.gradle.api.Task;
@@ -40,21 +38,19 @@ import java.util.zip.ZipEntry;
 public class MavenMojoRunner implements Action<Task> {
 
     private DefaultPlexusContainer container;
-    private MavenProject mavenProject;
-    private MavenExecutionRequest executionRequest;
     private Class<? extends Mojo> mojoClass;
     private Plugin plugin;
     private PluginExecution execution;
     private String goal;
+    private MavenSession session;
 
-    public MavenMojoRunner(DefaultPlexusContainer container, Class<? extends Mojo> mojoClass, Plugin plugin, PluginExecution execution, String goal, MavenProject mavenProject, MavenExecutionRequest executionRequest) throws ComponentLookupException {
+    public MavenMojoRunner(DefaultPlexusContainer container, Class<? extends Mojo> mojoClass, Plugin plugin, PluginExecution execution, String goal, MavenSession session) throws ComponentLookupException {
         this.container = container;
         this.mojoClass = mojoClass;
         this.plugin = plugin;
         this.execution = execution;
         this.goal = goal;
-        this.mavenProject = mavenProject;
-        this.executionRequest = executionRequest;
+        this.session = session;
     }
 
 
@@ -78,12 +74,7 @@ public class MavenMojoRunner implements Action<Task> {
                     MojoExecution mojoExecution = new MojoExecution(plugin, goal, execution.getId());
                     MojoDescriptor mojoDescriptor = pluginDescriptor.getMojo(goal);
                     mojoExecution.setMojoDescriptor(mojoDescriptor);
-
-                    MavenExecutionResult result = new DefaultMavenExecutionResult();
-                    result.setProject(mavenProject);
-
-                    MavenSession session = new MavenSession(container, executionRequest, result);
-                    session.setCurrentProject(mavenProject);
+                    mojoExecution.setConfiguration(convert(mojoDescriptor));
                     Mojo mojo = mojoClass.newInstance();
                     container.addComponent(mojo, mojoDescriptor.getRole(), mojoDescriptor.getRoleHint());
                     String configuratorId = mojoDescriptor.getComponentConfigurator();
@@ -100,4 +91,30 @@ public class MavenMojoRunner implements Action<Task> {
             }
         }
     }
+
+    private Xpp3Dom convert(MojoDescriptor mojoDescriptor) {
+        Xpp3Dom dom = new Xpp3Dom("configuration");
+
+        PlexusConfiguration c = mojoDescriptor.getMojoConfiguration();
+
+        PlexusConfiguration[] ces = c.getChildren();
+
+        if (ces != null) {
+            for (PlexusConfiguration ce : ces) {
+                String value = ce.getValue(null);
+                String defaultValue = ce.getAttribute("default-value", null);
+                if (value != null || defaultValue != null) {
+                    Xpp3Dom e = new Xpp3Dom(ce.getName());
+                    e.setValue(value);
+                    if (defaultValue != null) {
+                        e.setAttribute("default-value", defaultValue);
+                    }
+                    dom.addChild(e);
+                }
+            }
+        }
+
+        return dom;
+    }
+
 }
