@@ -1,7 +1,10 @@
 This is Maven Embedder plugin for Gradle. It retrieves project information from pom.xml and configures Gradle accordingly.
 
-WARNING: There is a conflict between this plugin Maven3 dependency and maven plugin Maven2 dependency.
+WARNING #1: There is a conflict between this plugin Maven3 dependency and maven plugin Maven2 dependency.
 Delete $GRADLE_HOME/lib/maven-ant-tasks-2.1.0.jar and don't use maven plugin in your build.
+
+WARNING #2: There is a conflict between this plugin Google Guava dependency and Google Collections jar in Gradle's lib.
+Replace $GRADLE_HOME/lib/google-collections-1.0.jar with guava-r06.jar (from Guava project page or from any repository).
 
 Usage:
 ---------------------------

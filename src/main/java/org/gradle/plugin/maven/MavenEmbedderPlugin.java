@@ -2,6 +2,7 @@ package org.gradle.plugin.maven;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import org.apache.maven.artifact.Artifact;
@@ -43,7 +44,9 @@ import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
+import org.gradle.api.internal.artifacts.dependencies.AbstractModuleDependency;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
+import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency;
 import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact;
 import org.gradle.api.internal.project.AbstractProject;
 import org.gradle.api.plugins.JavaPlugin;
@@ -215,20 +218,42 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
             org.gradle.api.artifacts.Configuration configuration = configurations.getByName(ObjectConverter.scope2Configuration(scope, mavenProject.getPackaging()));
             Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
             for (final Dependency mavenDependency : scopeDependencies) {
-                if (!any(reactorProjects, new Predicate<MavenProject>() {
+                AbstractModuleDependency dependency;
+                if (any(reactorProjects, new Predicate<MavenProject>() {
                     public boolean apply(MavenProject input) {
                         return (input.getGroupId().equals(mavenDependency.getGroupId()) &&
                                 input.getArtifactId().equals(mavenDependency.getArtifactId()) &&
                                 input.getVersion().equals(mavenDependency.getVersion()));
                     }
                 })) {
-                    DefaultExternalModuleDependency dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
+                    // this is a concrete gradle project, it probably has parent in which the plugin is applied in subprojects closure
+                    Project parent = project.getParent();
+                    Set<Project> allProjects;
+                    if (parent != null) {
+                        allProjects = parent.getAllprojects();
+                    } else { //if not, maybe parent project itself has code and this plugin is applied in allprojects closure
+                        allProjects = project.getAllprojects();
+                    }
+                    Project projectDependency = find(allProjects, new Predicate<Project>() {
+                        public boolean apply(Project input) {
+                            Splitter splitter = Splitter.on(':');
+                            Iterable<String> nameParts = splitter.split(input.getName());
+                            return any(nameParts, new Predicate<String>() {
+                                public boolean apply(String input) {
+                                    return input.equalsIgnoreCase(mavenDependency.getArtifactId());
+                                }
+                            });
+                        }
+                    });
+                    dependency = new DefaultProjectDependency(projectDependency, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
+                } else {
+                    dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
                     List<Exclusion> exclusions = mavenDependency.getExclusions();
                     for (Exclusion exclusion : exclusions) {
                         dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
                     }
-                    configuration.addDependency(dependency);
                 }
+                configuration.addDependency(dependency);
             }
         }
     }

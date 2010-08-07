@@ -12,7 +12,8 @@ targetCompatibility = 1.5
 
 configurations {
   deployerJars
-  compile {transitive = false}
+  all*.exclude module: 'google-collections' //we use guava instead
+
 }
 
 task sourcesJar(type: Jar, dependsOn: compileJava) {
@@ -29,7 +30,6 @@ artifacts {
 //    configuration = configurations.deployerJars
 //    pom.artifactId = 'gradle-mavenembedder-plugin'
 //    repository(url: "http://repo.jfrog.org/artifactory/gradle-release-local") {
-
 //    }
 //  }
 //}
@@ -61,4 +61,11 @@ dependencies {
 
   //Utils
   compile "com.google.guava:guava:r06"
+
+  task show {
+    println 'compile -----------------'
+    configurations.compile.each { println it }
+    println 'test -----------------'
+    configurations.testCompile.each { println it }
+  }
 }
