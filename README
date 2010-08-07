@@ -3,6 +3,40 @@ This is Maven Embedder plugin for Gradle. It retrieves project information from 
 WARNING: There is a conflict between this plugin Maven3 dependency and maven plugin Maven2 dependency.
 Delete $GRADLE_HOME/lib/maven-ant-tasks-2.1.0.jar and don't use maven plugin in your build.
 
+Usage:
+---------------------------
+For single module the only mandatory code in build.gradle are:
+
+buildscript {
+  repositories {
+    mavenRepo urls: ["http://repo.jfrog.org/artifactory/gradle"]
+  }
+
+  dependencies {
+    classpath "org.gradle.plugins:gradle-mavenembedder-plugin:0.1"
+  }
+}
+
+apply plugin: org.gradle.plugin.maven.MavenEmbedderPlugin
+
+For multi-module you must list all your modules in settings.gradle as usual. Your parent build.gradle will look like:
+
+buildscript {
+  repositories {
+    mavenRepo urls: ["http://repo.jfrog.org/artifactory/gradle"]
+  }
+
+  dependencies {
+    classpath "org.gradle.plugins:gradle-mavenembedder-plugin:0.1"
+  }
+}
+
+subprojects {
+apply plugin: org.gradle.plugin.maven.MavenEmbedderPlugin
+}
+
+See the bug related to multimodule build listed in TODO.
+
 Features list:
 ---------------------------
 * Applying plugins for packagings: jar, war
