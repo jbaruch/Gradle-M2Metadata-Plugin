@@ -10,17 +10,17 @@ import static com.google.common.collect.ImmutableMap.of;
  * @author JBaruch
  * @since 05-Aug-2010
  */
-public class ObjectConverter {
+class ObjectConverter {
 
     private static final String JAVA_PLUGIN_NAME = "java";
 
     private static final String WAR_PLUGIN_NAME = "war";
 
-    private static Map<String, String> packagingToPlugin = of(
+    private static final Map<String, String> packagingToPlugin = of(
             "jar", JAVA_PLUGIN_NAME,
             "war", WAR_PLUGIN_NAME);
 
-    private static Map<String, ? extends Map<String, String>> scopeToConfigurationAccordingToPackaging = of(
+    private static final Map<String, ? extends Map<String, String>> scopeToConfigurationAccordingToPackaging = of(
             "compile", of("jar", "compile", "war", "compile"),
             "test", of("jar", "testCompile", "war", "testCompile"),
             "provided", of("jar", "compile", "war", "providedCompile"));

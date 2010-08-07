@@ -6,23 +6,14 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Multimap;
 import org.apache.maven.artifact.Artifact;
-import org.apache.maven.artifact.InvalidRepositoryException;
-import org.apache.maven.artifact.resolver.ArtifactNotFoundException;
-import org.apache.maven.artifact.resolver.ArtifactResolutionException;
 import org.apache.maven.execution.*;
-import org.apache.maven.lifecycle.LifecycleNotFoundException;
-import org.apache.maven.lifecycle.LifecyclePhaseNotFoundException;
 import org.apache.maven.model.Dependency;
 import org.apache.maven.model.Exclusion;
 import org.apache.maven.model.PluginExecution;
 import org.apache.maven.model.Repository;
 import org.apache.maven.model.building.ModelBuildingRequest;
-import org.apache.maven.plugin.*;
 import org.apache.maven.plugin.clean.CleanMojo;
-import org.apache.maven.plugin.prefix.NoPluginFoundForPrefixException;
-import org.apache.maven.plugin.version.PluginVersionResolutionException;
 import org.apache.maven.project.*;
-import org.apache.maven.project.artifact.InvalidDependencyVersionException;
 import org.apache.maven.project.artifact.ProjectArtifact;
 import org.apache.maven.settings.Settings;
 import org.apache.maven.settings.building.DefaultSettingsBuildingRequest;
@@ -35,7 +26,6 @@ import org.codehaus.plexus.DefaultPlexusContainer;
 import org.codehaus.plexus.PlexusContainerException;
 import org.codehaus.plexus.classworlds.ClassWorld;
 import org.codehaus.plexus.component.repository.exception.ComponentLookupException;
-import org.codehaus.plexus.configuration.PlexusConfigurationException;
 import org.codehaus.plexus.util.cli.CommandLineUtils;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.gradle.api.GradleException;
@@ -56,7 +46,6 @@ import org.gradle.api.tasks.bundling.Jar;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.*;
 
 import static com.google.common.collect.ImmutableMap.of;
@@ -71,6 +60,7 @@ import static org.gradle.api.artifacts.Dependency.ARCHIVES_CONFIGURATION;
  * @author JBaruch
  * @since 03-Aug-2010
  */
+@SuppressWarnings({"UnusedDeclaration"})
 public class MavenEmbedderPlugin implements Plugin<Project> {
 
     private static final String MAVEN_COMPILER_PLUGIN_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
@@ -89,7 +79,6 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
     private Settings mavenSettings;
     private DefaultPlexusContainer container;
     private static final String MAVEN_CLEAN_PHASE = "clean";
-    private MavenExecutionRequest executionRequest;
     private static final String MAVEN_CLEAN_GOAL = "clean";
     private MavenSession session;
     private Iterable<MavenProject> reactorProjects;
@@ -120,11 +109,11 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         }
     }
 
-    private void joinTasks() throws ComponentLookupException, ArtifactResolutionException, PluginManagerException, InvalidDependencyVersionException, MojoExecutionException, ArtifactNotFoundException, MojoFailureException, PluginConfigurationException, InvalidPluginDescriptorException, PluginDescriptorParsingException, MojoNotFoundException, PluginNotFoundException, PluginResolutionException, InvalidRepositoryException, IOException, URISyntaxException, PlexusConfigurationException, InstantiationException, IllegalAccessException {
+    private void joinTasks() {
         joinClean();
     }
 
-    private void joinClean() throws ComponentLookupException {
+    private void joinClean() {
         org.apache.maven.model.Plugin cleanPlugin = mavenProject.getPlugin(MAVEN_CLEAN_PLUGIN_KEY);
         List<PluginExecution> executions = cleanPlugin.getExecutions();
         try {
@@ -168,7 +157,7 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         }
     }
 
-    private void configureSettings() throws ComponentLookupException {
+    private void configureSettings() {
         AbstractProject abstractProject = (AbstractProject) project;
         abstractProject.setVersion(mavenProject.getVersion());
         abstractProject.setGroup(mavenProject.getGroupId());
@@ -206,7 +195,7 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         }
     }
 
-    private void addDependencies() throws ComponentLookupException, InvalidPluginDescriptorException, PluginVersionResolutionException, PluginDescriptorParsingException, NoPluginFoundForPrefixException, MojoNotFoundException, PluginNotFoundException, PluginResolutionException, LifecyclePhaseNotFoundException, LifecycleNotFoundException {
+    private void addDependencies() {
         List<Dependency> dependencies = mavenProject.getDependencies();
         Multimap<String, Dependency> dependenciesByScope = index(dependencies, new Function<Dependency, String>() {
             public String apply(Dependency from) {
@@ -259,9 +248,9 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
     }
 
 
-    private void readMavenProject() throws PlexusContainerException, ComponentLookupException, MavenExecutionRequestPopulationException, ProjectBuildingException, IOException, SettingsBuildingException {
+    private void readMavenProject() throws ComponentLookupException, MavenExecutionRequestPopulationException, ProjectBuildingException {
         ProjectBuilder builder = container.lookup(ProjectBuilder.class);
-        executionRequest = new DefaultMavenExecutionRequest();
+        MavenExecutionRequest executionRequest = new DefaultMavenExecutionRequest();
         MavenExecutionRequestPopulator populator = container.lookup(MavenExecutionRequestPopulator.class);
         populator.populateFromSettings(executionRequest, mavenSettings);
         populator.populateDefaults(executionRequest);
