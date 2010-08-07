@@ -8,8 +8,11 @@ version = '0.1'
 sourceCompatibility = 1.5
 targetCompatibility = 1.5
 
+
+
 configurations {
   deployerJars
+  compile {transitive = false}
 }
 
 task sourcesJar(type: Jar, dependsOn: compileJava) {
@@ -26,7 +29,7 @@ artifacts {
 //    configuration = configurations.deployerJars
 //    pom.artifactId = 'gradle-mavenembedder-plugin'
 //    repository(url: "http://repo.jfrog.org/artifactory/gradle-release-local") {
-//      authentication(userName: "jbaruch", password: 'qrn%H*3DKJ4tey3')
+
 //    }
 //  }
 //}
