@@ -4,6 +4,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.*;
@@ -20,6 +21,7 @@ import org.apache.maven.settings.building.DefaultSettingsBuildingRequest;
 import org.apache.maven.settings.building.SettingsBuilder;
 import org.apache.maven.settings.building.SettingsBuildingException;
 import org.apache.maven.settings.building.SettingsBuildingRequest;
+import org.apache.maven.wagon.providers.http.HttpWagon;
 import org.codehaus.plexus.ContainerConfiguration;
 import org.codehaus.plexus.DefaultContainerConfiguration;
 import org.codehaus.plexus.DefaultPlexusContainer;
@@ -52,6 +54,7 @@ import static com.google.common.collect.ImmutableMap.of;
 import static com.google.common.collect.Iterables.*;
 import static com.google.common.collect.Multimaps.index;
 import static org.gradle.api.artifacts.Dependency.ARCHIVES_CONFIGURATION;
+import static org.gradle.plugin.maven.ObjectConverter.scope2Configuration;
 
 
 /**
@@ -204,17 +207,28 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
         });
         ConfigurationContainer configurations = project.getConfigurations();
         for (String scope : dependenciesByScope.keySet()) {
-            org.gradle.api.artifacts.Configuration configuration = configurations.getByName(ObjectConverter.scope2Configuration(scope, mavenProject.getPackaging()));
+            org.gradle.api.artifacts.Configuration configuration = configurations.getByName(scope2Configuration(scope, mavenProject.getPackaging()));
             Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
             for (final Dependency mavenDependency : scopeDependencies) {
                 AbstractModuleDependency dependency;
-                if (any(reactorProjects, new Predicate<MavenProject>() {
+                Iterable<MavenProject> projectModules = filter(reactorProjects, new Predicate<MavenProject>() {//find maven module for dependency
+
+                    @Override
                     public boolean apply(MavenProject input) {
                         return (input.getGroupId().equals(mavenDependency.getGroupId()) &&
                                 input.getArtifactId().equals(mavenDependency.getArtifactId()) &&
                                 input.getVersion().equals(mavenDependency.getVersion()));
                     }
-                })) {
+                });
+
+                if (Iterables.isEmpty(projectModules)) {//no module found, add external dependnecy
+                    dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
+                    List<Exclusion> exclusions = mavenDependency.getExclusions();
+                    for (Exclusion exclusion : exclusions) {
+                        dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
+                    }
+                } else { //Project Dependency found
+                    final File mavenModule = Iterables.getOnlyElement(projectModules).getBasedir();
                     // this is a concrete gradle project, it probably has parent in which the plugin is applied in subprojects closure
                     Project parent = project.getParent();
                     Set<Project> allProjects;
@@ -229,18 +243,12 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
                             Iterable<String> nameParts = splitter.split(input.getName());
                             return any(nameParts, new Predicate<String>() {
                                 public boolean apply(String input) {
-                                    return input.equalsIgnoreCase(mavenDependency.getArtifactId());
+                                    return input.equalsIgnoreCase(mavenModule.getName());
                                 }
                             });
                         }
                     });
                     dependency = new DefaultProjectDependency(projectDependency, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
-                } else {
-                    dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
-                    List<Exclusion> exclusions = mavenDependency.getExclusions();
-                    for (Exclusion exclusion : exclusions) {
-                        dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
-                    }
                 }
                 configuration.addDependency(dependency);
             }
@@ -249,6 +257,7 @@ public class MavenEmbedderPlugin implements Plugin<Project> {
 
 
     private void readMavenProject() throws ComponentLookupException, MavenExecutionRequestPopulationException, ProjectBuildingException {
+        System.out.println("Wagon: " + HttpWagon.class.getName());
         ProjectBuilder builder = container.lookup(ProjectBuilder.class);
         MavenExecutionRequest executionRequest = new DefaultMavenExecutionRequest();
         MavenExecutionRequestPopulator populator = container.lookup(MavenExecutionRequestPopulator.class);

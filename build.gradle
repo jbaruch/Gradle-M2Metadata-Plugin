@@ -8,6 +8,15 @@ version = '0.1'
 sourceCompatibility = 1.5
 targetCompatibility = 1.5
 
+ideaModule {
+  excludeDirs += file('buildSrc/build')
+  excludeDirs += file('buildSrc/.gradle')
+}
+
+ideaProject {
+  javaVersion = '1.6'
+}
+
 
 
 configurations {
@@ -51,6 +60,14 @@ dependencies {
 
 //  Maven plugins
   compile "org.apache.maven.plugins:maven-clean-plugin:2.4.1"
+
+//  Maven wagons
+  compile "org.apache.maven.wagon:wagon-http:1.0-beta-6"
+  compile "org.apache.maven.wagon:wagon-ssh:1.0-beta-6"
+  compile "org.apache.maven.wagon:wagon-ssh-external:1.0-beta-6"
+  compile "org.apache.maven.wagon:wagon-ssh-file:1.0-beta-6"
+  compile "org.apache.maven.wagon:wagon-webdav-jackrabbit:1.0-beta-6"
+  compile "org.apache.maven.wagon:wagon-http-lightweight:1.0-beta-6"
 
 //  Gradle
   compile "org.gradle:gradle-plugins:0.9-rc-1"
