@@ -37,7 +37,7 @@ artifacts {
 //uploadArchives {
 //  repositories.mavenDeployer {
 //    configuration = configurations.deployerJars
-//    pom.artifactId = 'gradle-mavenembedder-plugin'
+//    pom.artifactId = 'gradle-m2metadata-plugin'
 //    repository(url: "http://repo.jfrog.org/artifactory/gradle-release-local") {
 //    }
 //  }
