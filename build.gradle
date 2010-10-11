@@ -17,8 +17,6 @@ ideaProject {
   javaVersion = '1.6'
 }
 
-
-
 configurations {
   deployerJars
   all*.exclude module: 'google-collections' //we use guava instead

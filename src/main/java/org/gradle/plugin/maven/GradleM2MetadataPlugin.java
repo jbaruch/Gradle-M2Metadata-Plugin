@@ -31,6 +31,7 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ConfigurationContainer;
+import org.gradle.api.artifacts.ProjectDependenciesBuildInstruction;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
 import org.gradle.api.internal.artifacts.dependencies.AbstractModuleDependency;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
@@ -82,7 +83,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
         defaultUserSettingsFile = new File(new File(System.getProperty("user.home"), ".m2"), "settings.xml");
         defaultGlobalSettingsFile = new File(System.getProperty("maven.home", System.getProperty("user.dir", "")), "conf/settings.xml");
         try {
-            project.getLogger().lifecycle("Reading maven project...");
+            project.getLogger().lifecycle("Reading maven project for {}...", project.getName());
             buildContainer();
             readSettings();
             readMavenProject();
@@ -176,50 +177,57 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
         });
         ConfigurationContainer configurations = project.getConfigurations();
         for (String scope : dependenciesByScope.keySet()) {
-            org.gradle.api.artifacts.Configuration configuration = configurations.getByName(scope2Configuration(scope, mavenProject.getPackaging()));
-            Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
-            for (final Dependency mavenDependency : scopeDependencies) {
-                AbstractModuleDependency dependency;
-                Iterable<MavenProject> projectModules = filter(reactorProjects, new Predicate<MavenProject>() {//find maven module for dependency
+            String packaging = mavenProject.getPackaging();
+            String configurationName = scope2Configuration(scope, packaging);
+            if (configurationName == null) {
+                project.getLogger().warn("Can't find configuration matching scope {} for packaging {}", scope, packaging);
+            } else {
+                org.gradle.api.artifacts.Configuration configuration = configurations.getByName(configurationName);
+                Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
+                for (final Dependency mavenDependency : scopeDependencies) {
+                    AbstractModuleDependency dependency;
+                    Iterable<MavenProject> projectModules = filter(reactorProjects, new Predicate<MavenProject>() {//find maven module for dependency
 
-                    @Override
-                    public boolean apply(MavenProject input) {
-                        return (input.getGroupId().equals(mavenDependency.getGroupId()) &&
-                                input.getArtifactId().equals(mavenDependency.getArtifactId()) &&
-                                input.getVersion().equals(mavenDependency.getVersion()));
-                    }
-                });
-
-                if (Iterables.isEmpty(projectModules)) {//no module found, add external dependency
-                    dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
-                    List<Exclusion> exclusions = mavenDependency.getExclusions();
-                    for (Exclusion exclusion : exclusions) {
-                        dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
-                    }
-                } else { //Project Dependency found
-                    final File mavenModule = Iterables.getOnlyElement(projectModules).getBasedir();
-                    // this is a concrete gradle project, it probably has parent in which the plugin is applied in subprojects closure
-                    Project parent = project.getParent();
-                    Set<Project> allProjects;
-                    if (parent != null) {
-                        allProjects = parent.getAllprojects();
-                    } else { //if not, maybe parent project itself has code and this plugin is applied in allprojects closure
-                        allProjects = project.getAllprojects();
-                    }
-                    Project projectDependency = find(allProjects, new Predicate<Project>() {
-                        public boolean apply(Project input) {
-                            Splitter splitter = Splitter.on(':');
-                            Iterable<String> nameParts = splitter.split(input.getName());
-                            return any(nameParts, new Predicate<String>() {
-                                public boolean apply(String input) {
-                                    return input.equalsIgnoreCase(mavenModule.getName());
-                                }
-                            });
+                        @Override
+                        public boolean apply(MavenProject input) {
+                            return (input.getGroupId().equals(mavenDependency.getGroupId()) &&
+                                    input.getArtifactId().equals(mavenDependency.getArtifactId()) &&
+                                    input.getVersion().equals(mavenDependency.getVersion()));
                         }
                     });
-                    dependency = new DefaultProjectDependency(projectDependency, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
+
+                    if (Iterables.isEmpty(projectModules)) {//no module found, add external dependency
+                        dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
+                        List<Exclusion> exclusions = mavenDependency.getExclusions();
+                        for (Exclusion exclusion : exclusions) {
+                            dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
+                        }
+                    } else { //Project Dependency found
+                        final File mavenModule = Iterables.getOnlyElement(projectModules).getBasedir();
+                        // this is a concrete gradle project, it probably has parent in which the plugin is applied in subprojects closure
+                        Project parent = project.getParent();
+                        Set<Project> allProjects;
+                        if (parent != null) {
+                            allProjects = parent.getAllprojects();
+                        } else { //if not, maybe parent project itself has code and this plugin is applied in allprojects closure
+                            allProjects = project.getAllprojects();
+                        }
+                        Project projectDependency = find(allProjects, new Predicate<Project>() {
+                            public boolean apply(Project input) {//input:project ':policy-client/1.0'
+                                Splitter splitter = Splitter.on(':');
+                                Iterable<String> nameParts = splitter.split(input.getName());
+                                return any(nameParts, new Predicate<String>() {
+                                    public boolean apply(String input) {
+                                        return mavenModule.getPath().replaceAll("\\\\", "/").endsWith(input);
+//                                    return input.equalsIgnoreCase(mavenModule.getName());//mavenModule:D:\work\policy2\policy-types\1.0
+                                    }
+                                });
+                            }
+                        });
+                        dependency = new DefaultProjectDependency(projectDependency, configurationName, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
+                    }
+                    configuration.addDependency(dependency);
                 }
-                configuration.addDependency(dependency);
             }
         }
     }
