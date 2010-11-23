@@ -1,9 +1,9 @@
 apply plugin: 'java'
-//apply plugin: 'maven'
+apply plugin: 'maven'
 apply plugin: 'idea'
 
 group = 'org.gradle.plugins'
-version = '0.1'
+version = '1.0-SNAPSHOT'
 
 sourceCompatibility = 1.5
 targetCompatibility = 1.5
@@ -32,14 +32,15 @@ artifacts {
   archives sourcesJar
 }
 
-//uploadArchives {
-//  repositories.mavenDeployer {
-//    configuration = configurations.deployerJars
-//    pom.artifactId = 'gradle-m2metadata-plugin'
-//    repository(url: "http://repo.jfrog.org/artifactory/gradle-release-local") {
-//    }
-//  }
-//}
+uploadArchives {
+  repositories.mavenDeployer {
+    configuration = configurations.deployerJars
+    pom.artifactId = 'gradle-m2metadata-plugin'
+    snapshotRepository(url: "http://repo.jfrog.org/artifactory/gradle-snapshots-local") {
+      authentication(userName: USER, password: PASSWORD)
+    }
+  }
+}
 
 repositories {
   mavenRepo urls: ["http://repo.jfrog.org/artifactory/libs-releases"]
@@ -68,14 +69,10 @@ dependencies {
   compile "org.apache.maven.wagon:wagon-http-lightweight:1.0-beta-6"
 
 //  Gradle
-  compile "org.gradle:gradle-plugins:0.9-rc-1"
-  compile "org.gradle:gradle-core:0.9-rc-1"
-  compile "org.codehaus.groovy:groovy-all:1.7.4"
-  compile "org.apache.ivy:ivy:2.1.0"
-  compile "org.slf4j:slf4j-api:1.6.0"
+  compile gradleApi()
 
   //Utils
-  compile "com.google.guava:guava:r06"
+  compile "com.google.guava:guava:r07"
 
   task show {
     println 'compile -----------------'
