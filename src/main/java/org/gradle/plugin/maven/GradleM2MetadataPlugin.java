@@ -2,7 +2,6 @@ package org.gradle.plugin.maven;
 
 import com.google.common.base.Function;
 import com.google.common.base.Predicate;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
@@ -31,7 +30,6 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ConfigurationContainer;
-import org.gradle.api.artifacts.ProjectDependenciesBuildInstruction;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
 import org.gradle.api.internal.artifacts.dependencies.AbstractModuleDependency;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
@@ -105,8 +103,29 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
     private void retrieveMavenPluginsMetadata() {
         JavaPluginConvention javaConvention = (JavaPluginConvention) project.getConvention().getPlugins().get(JAVA_PLUGIN_CONVENTION_NAME);
         if (javaConvention != null) {
-            org.apache.maven.model.Plugin mavenCompilerPlugin = mavenProject.getPlugin(MAVEN_COMPILER_PLUGIN_KEY);
-            Xpp3Dom configuration = (Xpp3Dom) mavenCompilerPlugin.getConfiguration();
+            configureCompiler(javaConvention);
+            configureSources(javaConvention);
+        }
+        //TODO add artifactId and repo to maven-plugin's uploadArchives
+    }
+
+    private void configureSources(JavaPluginConvention javaConvention) {
+        org.apache.maven.model.Plugin mavenSourcePlugin = mavenProject.getPlugin(MAVEN_SOURCE_PLUGIN_KEY);
+        if (mavenSourcePlugin != null) {
+            //TODO support tests source packaging
+            Jar sourcesJar = project.getTasks().add(SOURCES_JAR_TASK_NAME, Jar.class);
+            sourcesJar.setDescription("Generates a  jar archive with all the source classes.");
+            sourcesJar.dependsOn(project.getTasksByName(JavaPlugin.COMPILE_JAVA_TASK_NAME, false));
+            sourcesJar.setClassifier(SOURCES_CLASSIFIER);
+            sourcesJar.from(javaConvention.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getAllSource());
+            project.getConfigurations().getByName(ARCHIVES_CONFIGURATION).addArtifact(new ArchivePublishArtifact(sourcesJar));
+        }
+    }
+
+    private void configureCompiler(JavaPluginConvention javaConvention) {
+        org.apache.maven.model.Plugin mavenCompilerPlugin = mavenProject.getPlugin(MAVEN_COMPILER_PLUGIN_KEY);
+        Xpp3Dom configuration = (Xpp3Dom) mavenCompilerPlugin.getConfiguration();
+        if (configuration != null) { //where is my null safe elvis :(
             Xpp3Dom source = configuration.getChild(SOURCE_LEVEL_COMPILE_PLUGIN_SETTING);
             if (source != null) {
                 javaConvention.setSourceCompatibility(source.getValue());
@@ -116,18 +135,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
             if (target != null) {
                 javaConvention.setTargetCompatibility(target.getValue());
             }
-
-            org.apache.maven.model.Plugin mavenSourcePlugin = mavenProject.getPlugin(MAVEN_SOURCE_PLUGIN_KEY);
-            if (mavenSourcePlugin != null) {
-                Jar sourcesJar = project.getTasks().add(SOURCES_JAR_TASK_NAME, Jar.class);
-                sourcesJar.setDescription("Generates a  jar archive with all the source classes.");
-                sourcesJar.dependsOn(project.getTasksByName(JavaPlugin.COMPILE_JAVA_TASK_NAME, false));
-                sourcesJar.setClassifier(SOURCES_CLASSIFIER);
-                sourcesJar.from(javaConvention.getSourceSets().getByName(SourceSet.MAIN_SOURCE_SET_NAME).getAllSource());
-                project.getConfigurations().getByName(ARCHIVES_CONFIGURATION).addArtifact(new ArchivePublishArtifact(sourcesJar));
-            }
         }
-        //TODO add artifactId and repo to maven-plugin's uploadArchives
     }
 
     private void configureSettings() {
@@ -205,23 +213,11 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                     } else { //Project Dependency found
                         final File mavenModule = Iterables.getOnlyElement(projectModules).getBasedir();
                         // this is a concrete gradle project, it probably has parent in which the plugin is applied in subprojects closure
-                        Project parent = project.getParent();
-                        Set<Project> allProjects;
-                        if (parent != null) {
-                            allProjects = parent.getAllprojects();
-                        } else { //if not, maybe parent project itself has code and this plugin is applied in allprojects closure
-                            allProjects = project.getAllprojects();
-                        }
+                        Set<Project> allProjects = new HashSet<Project>();
+                        collectAllProjects(project, allProjects);
                         Project projectDependency = find(allProjects, new Predicate<Project>() {
                             public boolean apply(Project input) {//input:project ':policy-client/1.0'
-                                Splitter splitter = Splitter.on(':');
-                                Iterable<String> nameParts = splitter.split(input.getName());
-                                return any(nameParts, new Predicate<String>() {
-                                    public boolean apply(String input) {
-                                        return mavenModule.getPath().replaceAll("\\\\", "/").endsWith(input);
-//                                    return input.equalsIgnoreCase(mavenModule.getName());//mavenModule:D:\work\policy2\policy-types\1.0
-                                    }
-                                });
+                                return mavenModule.equals(input.getBuildDir().getParentFile());//project dir
                             }
                         });
                         dependency = new DefaultProjectDependency(projectDependency, configurationName, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
@@ -229,6 +225,14 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                     configuration.addDependency(dependency);
                 }
             }
+        }
+    }
+
+    private void collectAllProjects(Project project, Set<Project> allProjects) {
+        allProjects.addAll(project.getAllprojects());
+        Project parent = project.getParent();
+        if (parent != null) {
+            collectAllProjects(parent, allProjects);
         }
     }
 

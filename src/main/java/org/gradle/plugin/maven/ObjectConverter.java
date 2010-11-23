@@ -23,6 +23,7 @@ class ObjectConverter {
     private static final Map<String, ? extends Map<String, String>> scopeToConfigurationAccordingToPackaging = of(
             "compile", of("jar", "compile", "war", "compile"),
             "test", of("jar", "testCompile", "war", "testCompile"),
+            "runtime", of("jar", "runtime", "war", "runtime"),
             "provided", of("jar", "compile", "war", "providedCompile"));
 
 

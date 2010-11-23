@@ -73,11 +73,4 @@ dependencies {
 
   //Utils
   compile "com.google.guava:guava:r07"
-
-  task show {
-    println 'compile -----------------'
-    configurations.compile.each { println it }
-    println 'test -----------------'
-    configurations.testCompile.each { println it }
-  }
 }
