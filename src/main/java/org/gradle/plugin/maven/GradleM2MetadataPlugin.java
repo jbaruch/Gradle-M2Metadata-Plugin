@@ -5,6 +5,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
+import org.apache.ivy.core.module.descriptor.ModuleDescriptor;
 import org.apache.maven.artifact.Artifact;
 import org.apache.maven.execution.*;
 import org.apache.maven.model.Dependency;
@@ -31,9 +32,8 @@ import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
-import org.gradle.api.internal.artifacts.dependencies.AbstractModuleDependency;
-import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
-import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency;
+import org.gradle.api.file.FileCollection;
+import org.gradle.api.internal.artifacts.dependencies.*;
 import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact;
 import org.gradle.api.internal.project.AbstractProject;
 import org.gradle.api.plugins.JavaPlugin;
@@ -193,7 +193,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                 org.gradle.api.artifacts.Configuration configuration = configurations.getByName(configurationName);
                 Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
                 for (final Dependency mavenDependency : scopeDependencies) {
-                    AbstractModuleDependency dependency;
+                    AbstractDependency dependency;
                     Iterable<MavenProject> projectModules = filter(reactorProjects, new Predicate<MavenProject>() {//find maven module for dependency
 
                         @Override
@@ -208,7 +208,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                         dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
                         List<Exclusion> exclusions = mavenDependency.getExclusions();
                         for (Exclusion exclusion : exclusions) {
-                            dependency.exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
+                            ((DefaultExternalModuleDependency) dependency).exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
                         }
                     } else { //Project Dependency found
                         final File mavenModule = Iterables.getOnlyElement(projectModules).getBasedir();
@@ -220,9 +220,17 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                                 return mavenModule.equals(input.getBuildDir().getParentFile());//project dir
                             }
                         });
-                        dependency = new DefaultProjectDependency(projectDependency, configurationName, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
+                        if (configurationName.equals("testCompile") || configurationName.equals("testRuntime")) { // tests aren't packaged, so we need to depend on compiled classes
+                            FileCollection testClasses = projectDependency.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets().getByName("test").getClasses();
+                            dependency = new DefaultSelfResolvingDependency(testClasses);
+                        } else {
+                            System.out.println("Replacing " + configurationName + " with default...");
+                            configurationName = ModuleDescriptor.DEFAULT_CONFIGURATION;
+                            dependency = new DefaultProjectDependency(projectDependency, configurationName, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
+
+                        }
+                        configuration.addDependency(dependency);
                     }
-                    configuration.addDependency(dependency);
                 }
             }
         }
