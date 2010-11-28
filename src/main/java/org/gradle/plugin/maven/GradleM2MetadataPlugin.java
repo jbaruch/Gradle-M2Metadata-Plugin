@@ -30,16 +30,22 @@ import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
+import org.gradle.api.Task;
+import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.artifacts.dependencies.*;
+import org.gradle.api.internal.artifacts.dependencies.AbstractDependency;
+import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
+import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency;
+import org.gradle.api.internal.artifacts.dependencies.DefaultSelfResolvingDependency;
 import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact;
 import org.gradle.api.internal.project.AbstractProject;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.bundling.Jar;
+import org.gradle.api.tasks.testing.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -67,6 +73,10 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
     private static final String SOURCE_LEVEL_COMPILE_PLUGIN_SETTING = "source";
     private static final String TARGET_LEVEL_COMPILE_PLUGIN_SETTING = "target";
     private static final String JAVA_PLUGIN_CONVENTION_NAME = "java";
+    private static final String DEPENDENCIES_KEY = "lateBindDeps";
+    private static final String TESTNG_GROUP = "org.testng";
+    private static final String TESTNG_NAME = "testng";
+    private static final String TEST_RUNTIME_CONFIGURATION = "testRuntime";
     private File defaultUserSettingsFile;
     private File defaultGlobalSettingsFile;
 
@@ -75,6 +85,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
     private Settings mavenSettings;
     private DefaultPlexusContainer container;
     private Iterable<MavenProject> reactorProjects;
+    private static final String TEST_COMPILE_CONFIGURATION = "testCompile";
 
     public void apply(Project project) {
         this.project = project;
@@ -95,8 +106,34 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
             addRepositories();
             project.getLogger().lifecycle("Adding project dependencies...");
             addDependencies();
+            project.getLogger().lifecycle("Configuring correct test runner...");
+            configureTests();
         } catch (Exception e) {
             throw new GradleException("failed to read Maven project", e);
+        }
+    }
+
+    private void configureTests() {
+        ConfigurationContainer configurations = project.getConfigurations();
+        Configuration testRuntime = configurations.findByName(TEST_RUNTIME_CONFIGURATION);
+        Configuration testCompile = configurations.findByName(TEST_COMPILE_CONFIGURATION);
+        Set<org.gradle.api.artifacts.Dependency> testDependencies = new HashSet<org.gradle.api.artifacts.Dependency>();
+        if (testCompile != null) {
+            testDependencies.addAll(testCompile.getDependencies());
+        }
+        if (testRuntime != null) {
+            testDependencies.addAll(testRuntime.getDependencies());
+        }
+        if (any(testDependencies, new Predicate<org.gradle.api.artifacts.Dependency>() {
+            @Override
+            public boolean apply(org.gradle.api.artifacts.Dependency input) {
+                return input instanceof DefaultExternalModuleDependency && input.getGroup().equals(TESTNG_GROUP) && input.getName().equals(TESTNG_NAME);
+            }
+        })) {
+            Set<Task> tests = project.getTasksByName("test", false);
+            for (Task test : tests) {
+                ((Test) test).useTestNG();
+            }
         }
     }
 
@@ -112,7 +149,6 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
     private void configureSources(JavaPluginConvention javaConvention) {
         org.apache.maven.model.Plugin mavenSourcePlugin = mavenProject.getPlugin(MAVEN_SOURCE_PLUGIN_KEY);
         if (mavenSourcePlugin != null) {
-            //TODO support tests source packaging
             Jar sourcesJar = project.getTasks().add(SOURCES_JAR_TASK_NAME, Jar.class);
             sourcesJar.setDescription("Generates a  jar archive with all the source classes.");
             sourcesJar.dependsOn(project.getTasksByName(JavaPlugin.COMPILE_JAVA_TASK_NAME, false));
@@ -174,8 +210,26 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
         if (pluginName != null) {
             project.apply(of("plugin", pluginName));
         }
+        //only now we can add dependencies on this project classes
+        addReverseDependenciesOnClasses();
     }
 
+    @SuppressWarnings({"unchecked"})
+    private void addReverseDependenciesOnClasses() {
+        JavaPluginConvention convention = (JavaPluginConvention) project.getConvention().getPlugins().get(JAVA_PLUGIN_CONVENTION_NAME);
+        if (convention != null) {
+            List<DepDef> moduleDeps = (List<DepDef>) project.getProperties().get(DEPENDENCIES_KEY);
+            if (moduleDeps != null) {
+                for (DepDef moduleDep : moduleDeps) {
+                    Configuration configuration = moduleDep.project.getConfigurations().getByName(moduleDep.configuration);
+                    FileCollection testClasses = convention.getSourceSets().getByName("test").getClasses();
+                    configuration.addDependency(new DefaultSelfResolvingDependency(testClasses));
+                }
+            }
+        }
+    }
+
+    @SuppressWarnings({"unchecked"})
     private void addDependencies() {
         List<Dependency> dependencies = mavenProject.getDependencies();
         Multimap<String, Dependency> dependenciesByScope = index(dependencies, new Function<Dependency, String>() {
@@ -220,15 +274,27 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                                 return mavenModule.equals(input.getBuildDir().getParentFile());//project dir
                             }
                         });
-                        if (configurationName.equals("testCompile") || configurationName.equals("testRuntime")) { // tests aren't packaged, so we need to depend on compiled classes
-                            FileCollection testClasses = projectDependency.getConvention().getPlugin(JavaPluginConvention.class).getSourceSets().getByName("test").getClasses();
-                            dependency = new DefaultSelfResolvingDependency(testClasses);
+                        if (configurationName.equals("testCompile") || configurationName.equals(TEST_RUNTIME_CONFIGURATION)) { // tests aren't packaged, so we need to depend on compiled classes
+                            Object javaPlugin = projectDependency.getConvention().getPlugins().get(JAVA_PLUGIN_CONVENTION_NAME);
+                            //if the project of the dependency wasn't parsed yet, java plugin is not applyed, so we can't get it. Save for later.
+                            if (javaPlugin == null) {
+                                List<DepDef> moduleDeps = (List<DepDef>) projectDependency.getProperties().get(DEPENDENCIES_KEY);
+                                if (moduleDeps == null) {
+                                    moduleDeps = new ArrayList<DepDef>();
+                                    projectDependency.setProperty(DEPENDENCIES_KEY, moduleDeps);
+                                }
+                                moduleDeps.add(new DepDef(project, configurationName));
+                                dependency = null;
+                            } else {
+                                FileCollection testClasses = ((JavaPluginConvention) javaPlugin).getSourceSets().getByName("test").getClasses();
+                                dependency = new DefaultSelfResolvingDependency(testClasses);
+                            }
                         } else {
-                            System.out.println("Replacing " + configurationName + " with default...");
                             configurationName = ModuleDescriptor.DEFAULT_CONFIGURATION;
                             dependency = new DefaultProjectDependency(projectDependency, configurationName, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
-
                         }
+                    }
+                    if (dependency != null) {
                         configuration.addDependency(dependency);
                     }
                 }
@@ -270,5 +336,15 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                 .setClassWorld(new ClassWorld("plexus.core", this.getClass().getClassLoader()))
                 .setName("mavenCore");
         container = new DefaultPlexusContainer(containerConfiguration);
+    }
+
+    private static class DepDef {
+        public final Project project;
+        public final String configuration;
+
+        public DepDef(Project project, String configuration) {
+            this.configuration = configuration;
+            this.project = project;
+        }
     }
 }
