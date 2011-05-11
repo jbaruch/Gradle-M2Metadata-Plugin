@@ -20,7 +20,6 @@ ideaProject {
 configurations {
   deployerJars
   all*.exclude module: 'google-collections' //we use guava instead
-
 }
 
 task sourcesJar(type: Jar, dependsOn: compileJava) {
@@ -47,8 +46,9 @@ repositories {
   mavenRepo urls: ["http://repo.jfrog.org/artifactory/libs-snapshots"]
   mavenRepo urls: ["http://repo.jfrog.org/artifactory/gradle"]
 }
+
 dependencies {
-//  Maven
+  //Maven
   compile "org.apache.maven:maven-core:3.0-beta-1"
   compile "org.apache.maven:maven-model:3.0-beta-1"
   compile "org.apache.maven:maven-artifact:3.0-beta-1"
@@ -57,10 +57,10 @@ dependencies {
   compile "org.codehaus.plexus:plexus-container-default:1.5.4"
   compile "org.codehaus.plexus:plexus-classworlds:2.2.3"
 
-//  Maven plugins
+  //Maven plugins
   compile "org.apache.maven.plugins:maven-clean-plugin:2.4.1"
 
-//  Maven wagons
+  //Maven wagons
   compile "org.apache.maven.wagon:wagon-http:1.0-beta-6"
   compile "org.apache.maven.wagon:wagon-ssh:1.0-beta-6"
   compile "org.apache.maven.wagon:wagon-ssh-external:1.0-beta-6"
@@ -68,7 +68,7 @@ dependencies {
   compile "org.apache.maven.wagon:wagon-webdav-jackrabbit:1.0-beta-6"
   compile "org.apache.maven.wagon:wagon-http-lightweight:1.0-beta-6"
 
-//  Gradle
+  //Gradle
   compile gradleApi()
 
   //Utils
