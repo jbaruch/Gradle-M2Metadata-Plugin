@@ -58,12 +58,6 @@ import static org.gradle.api.artifacts.Dependency.ARCHIVES_CONFIGURATION;
 import static org.gradle.plugin.maven.ObjectConverter.scope2Configuration;
 
 
-/**
- * Created by IntelliJ IDEA.
- *
- * @author JBaruch
- * @since 03-Aug-2010
- */
 public class GradleM2MetadataPlugin implements Plugin<Project> {
 
     private static final String MAVEN_COMPILER_PLUGIN_KEY = "org.apache.maven.plugins:maven-compiler-plugin";
@@ -91,6 +85,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
         this.project = project;
         defaultUserSettingsFile = new File(new File(System.getProperty("user.home"), ".m2"), "settings.xml");
         defaultGlobalSettingsFile = new File(System.getProperty("maven.home", System.getProperty("user.dir", "")), "conf/settings.xml");
+        
         try {
             project.getLogger().lifecycle("Reading maven project for {}...", project.getName());
             buildContainer();
@@ -205,7 +200,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
     }
 
     private void applyGradlePlugins() {
-//    TODO    project.apply(of("plugin", "maven")); - can't do it because Maven2 dependencies in gradle class loader
+        //TODO project.apply(of("plugin", "maven")); - can't do it because Maven2 dependencies in gradle class loader
         String pluginName = ObjectConverter.packaging2Plugin(mavenProject.getPackaging());
         if (pluginName != null) {
             project.apply(of("plugin", pluginName));
@@ -309,7 +304,6 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
             collectAllProjects(parent, allProjects);
         }
     }
-
 
     private void readMavenProject() throws ComponentLookupException, MavenExecutionRequestPopulationException, ProjectBuildingException {
         ProjectBuilder builder = container.lookup(ProjectBuilder.class);
