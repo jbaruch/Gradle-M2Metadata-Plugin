@@ -5,14 +5,29 @@ See the [project's wiki](https://github.com/jbaruch/Gradle-M2Metadata-Plugin/wik
 
 Features:
 ============
-* Runtime parsing of Maven pom.xml files
-* Runtime configuration of Gradle dependencies via the `<dependency>` tags in the pom.xml
+* Project (POM)
+    * Add project version, groupId and status (SNAPSHOT/release)
+    * Runtime parsing of Maven pom.xml files
+* Plugins, Goals
+    * Applying plugins for packagings: jar, war
+    * Add source packaging if source-plugin present
+    * Executes maven-clean-plugin after Gradle's Java plugin clean task
+* Dependencies
+    * Runtime configuration of Gradle dependencies via the `<dependency>` tags in the pom.xml
+    * Dependencies in compile, provided and test scopes
+    * Exclusions for dependencies
+    * Turn on transitivity for compile scope
+* Repositories
+    * Maven repositories (both from pom.xml and profiles in settings.xml)
+* Compile, Source
+    * Java compiler source and target levels
+    * Add source packaging if source-plugin present
 
 Limitations (To Dos):
 ============
-* Does not map Maven plugins to the Gradle cousins.
+* Does not map all Maven plugins to the Gradle cousins (only a small subset).
 * Requires slightly special configuration to apply to multi-modules Gradle projects.
-* Requires definition of `repositories` and `dependencies`. These should possibly be defaulted by the `apply plugin: 'maven-metadata'` statement.
+* Requires definition of `repositories` and `dependencies` for the plugin to function. These should possibly be defaulted by the `apply plugin: 'maven-metadata'` statement.
 
 Recognized Contributors:
 ============
