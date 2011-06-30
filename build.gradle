@@ -33,12 +33,15 @@ artifacts {
   archives sourcesJar
 }
 
-uploadArchives {
-  repositories.mavenDeployer {
-    configuration = configurations.deployerJars
-    pom.artifactId = 'gradle-m2metadata-plugin'
-    snapshotRepository(url: "http://repo.jfrog.org/artifactory/gradle-snapshots-local") {
-      authentication(userName: USER, password: PASSWORD)
+//If USER and PASSWORD are not null, set it up as an archive upload
+if (project.metaClass.hasProperty(project, "USER")) {
+  uploadArchives {
+    repositories.mavenDeployer {
+      configuration = configurations.deployerJars
+      pom.artifactId = 'gradle-m2metadata-plugin'
+      snapshotRepository(url: "http://repo.jfrog.org/artifactory/gradle-snapshots-local") {
+        authentication(userName: USER, password: PASSWORD)
+      }
     }
   }
 }
