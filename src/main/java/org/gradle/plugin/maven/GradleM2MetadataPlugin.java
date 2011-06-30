@@ -56,9 +56,8 @@ import org.gradle.api.Project;
 import org.gradle.api.Task;
 import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ConfigurationContainer;
-import org.gradle.api.artifacts.ExcludeRule;
 import org.gradle.api.artifacts.dsl.RepositoryHandler;
-import org.gradle.api.internal.artifacts.dependencies.AbstractModuleDependency;
+import org.gradle.api.internal.artifacts.dependencies.AbstractDependency;
 import org.gradle.api.internal.artifacts.dependencies.DefaultExternalModuleDependency;
 import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency;
 import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact;
@@ -249,7 +248,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                 }
                 Collection<Dependency> scopeDependencies = dependenciesByScope.get(scope);
                 for (final Dependency mavenDependency : scopeDependencies) {
-                    AbstractModuleDependency dependency;
+                    AbstractDependency dependency;
                     Iterable<MavenProject> projectModules = filter(reactorProjects, new Predicate<MavenProject>() {//find maven module for dependency
 
                         public boolean apply(MavenProject input) {
@@ -261,6 +260,10 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
 
                     if (Iterables.isEmpty(projectModules)) {//no module found, add external dependency
                         dependency = new DefaultExternalModuleDependency(mavenDependency.getGroupId(), mavenDependency.getArtifactId(), mavenDependency.getVersion());
+                        List<Exclusion> exclusions = mavenDependency.getExclusions();
+                        for (Exclusion exclusion : exclusions) {
+                            ((DefaultExternalModuleDependency) dependency).exclude(of("group", exclusion.getGroupId(), "module", exclusion.getArtifactId()));
+                        }
                     } else { //Project Dependency found
                         final File mavenModule = Iterables.getOnlyElement(projectModules).getBasedir();
                         // this is a concrete gradle project, it probably has parent in which the plugin is applied in subprojects closure
@@ -275,11 +278,6 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                                 ModuleDescriptor.DEFAULT_CONFIGURATION, project.getGradle().getStartParameter().getProjectDependenciesBuildInstruction());
                     }
                     if (dependency != null) {
-                        List<Exclusion> exclusions = mavenDependency.getExclusions();
-                        for (Exclusion exclusion : exclusions) {
-                            dependency.exclude(of(ExcludeRule.GROUP_KEY, exclusion.getGroupId(), ExcludeRule.MODULE_KEY, exclusion.getArtifactId()));
-                        }
-
                         configuration.addDependency(dependency);
                     }
                 }
@@ -313,7 +311,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
             EclipseModel eclipseModel = project.getConvention().findPlugin(EclipseModel.class);
             if (eclipseModel != null) {
                 eclipseModel.getClasspath().getPlusConfigurations().add(configuration);
-                eclipseModel.getClasspath().getNoExportConfigNames().add(configuration.getName());
+                eclipseModel.getClasspath().getNonExportedConfigurations().add(configuration);
                 if (project.getPlugins().hasPlugin(WarPlugin.class)) {
                     eclipseModel.getWtp().getComponent().getLibConfigurations().add(configuration);
                 }
@@ -346,7 +344,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
         });
         MavenExecutionResult result = new DefaultMavenExecutionResult();
         result.setProject(mavenProject);
-        MavenSession session = new MavenSession(container, executionRequest, result);
+        MavenSession session = new MavenSession(container, buildingRequest.getRepositorySession(), executionRequest, result);
         session.setCurrentProject(mavenProject);
     }
 
