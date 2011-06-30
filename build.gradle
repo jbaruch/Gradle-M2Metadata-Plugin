@@ -33,16 +33,12 @@ artifacts {
   archives sourcesJar
 }
 
-//If USER and PASSWORD are set on the project model via the CLI, set up an archive upload destination
-// Command line specification would look like: gradle -PUSER=matthew -PPASSWORD=foobar 
-if (project.metaClass.hasProperty(project, "USER")) {
-  uploadArchives {
-    repositories.mavenDeployer {
-      configuration = configurations.deployerJars
-      pom.artifactId = 'gradle-m2metadata-plugin'
-      snapshotRepository(url: "http://repo.jfrog.org/artifactory/gradle-snapshots-local") {
-        authentication(userName: USER, password: PASSWORD)
-      }
+uploadArchives {
+  repositories.mavenDeployer {
+    configuration = configurations.deployerJars
+    pom.artifactId = 'gradle-m2metadata-plugin'
+    snapshotRepository(url: "http://repo.jfrog.org/artifactory/gradle-snapshots-local") {
+      authentication(userName: USER, password: PASSWORD)
     }
   }
 }
