@@ -33,7 +33,8 @@ artifacts {
   archives sourcesJar
 }
 
-//If USER and PASSWORD are not null, set it up as an archive upload
+//If USER and PASSWORD are set on the project model via the CLI, set up an archive upload destination
+// Command line specification would look like: gradle -PUSER=matthew -PPASSWORD=foobar 
 if (project.metaClass.hasProperty(project, "USER")) {
   uploadArchives {
     repositories.mavenDeployer {
