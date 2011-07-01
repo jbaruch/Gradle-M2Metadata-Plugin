@@ -33,3 +33,4 @@ Recognized Contributors:
 ============
 * [Baruch Sadogursky](http://github.com/jbaruch)
 * [Matthew McCullough](http://github.com/matthewmccullough)
+* [David Gileadi](http://github.com/dgileadi)
