@@ -79,3 +79,7 @@ dependencies {
   //Utils
   compile "com.google.guava:guava:r07"
 }
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '1.0-milestone-4-20110508123756+0200'
+}
