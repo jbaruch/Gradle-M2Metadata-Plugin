@@ -120,7 +120,6 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
             testDependencies.addAll(testRuntime.getDependencies());
         }
         if (any(testDependencies, new Predicate<org.gradle.api.artifacts.Dependency>() {
-            @Override
             public boolean apply(org.gradle.api.artifacts.Dependency input) {
                 return input instanceof DefaultExternalModuleDependency && input.getGroup().equals(TESTNG_GROUP) && input.getName().equals(TESTNG_NAME);
             }
@@ -217,7 +216,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
             if (moduleDeps != null) {
                 for (DepDef moduleDep : moduleDeps) {
                     Configuration configuration = moduleDep.project.getConfigurations().getByName(moduleDep.configuration);
-                    FileCollection testClasses = convention.getSourceSets().getByName("test").getClasses();
+                    FileCollection testClasses = convention.getSourceSets().getByName("test").getOutput();
                     configuration.addDependency(new DefaultSelfResolvingDependency(testClasses));
                 }
             }
@@ -245,7 +244,6 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                     AbstractDependency dependency;
                     Iterable<MavenProject> projectModules = filter(reactorProjects, new Predicate<MavenProject>() {//find maven module for dependency
 
-                        @Override
                         public boolean apply(MavenProject input) {
                             return (input.getGroupId().equals(mavenDependency.getGroupId()) &&
                                     input.getArtifactId().equals(mavenDependency.getArtifactId()) &&
@@ -281,7 +279,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                                 moduleDeps.add(new DepDef(project, configurationName));
                                 dependency = null;
                             } else {
-                                FileCollection testClasses = ((JavaPluginConvention) javaPlugin).getSourceSets().getByName("test").getClasses();
+                                FileCollection testClasses = ((JavaPluginConvention) javaPlugin).getSourceSets().getByName("test").getOutput();
                                 dependency = new DefaultSelfResolvingDependency(testClasses);
                             }
                         } else {
