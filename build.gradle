@@ -35,6 +35,7 @@ artifacts {
 //If USER and PASSWORD are set on the project model via the CLI, set up an archive upload destination
 // Command line specification would look like: gradle -PUSER=matthew -PPASSWORD=foobar 
 if (project.metaClass.hasProperty(project, "USER")) {
+  println "Setting up the upload (destination) repository for this plugin"
   uploadArchives {
     repositories.mavenDeployer {
       configuration = configurations.deployerJars
@@ -47,9 +48,7 @@ if (project.metaClass.hasProperty(project, "USER")) {
 }
 
 repositories {
-  mavenRepo urls: ["http://repo.jfrog.org/artifactory/libs-releases"]
-  mavenRepo urls: ["http://repo.jfrog.org/artifactory/libs-snapshots"]
-  mavenRepo urls: ["http://repo.jfrog.org/artifactory/gradle"]
+    mavenCentral()
 }
 
 dependencies {
