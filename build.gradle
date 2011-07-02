@@ -58,7 +58,7 @@ dependencies {
   compile "org.apache.maven:maven-artifact:3.0-beta-1"
   compile "org.apache.maven:maven-model-builder:3.0-beta-1"
   compile "org.apache.maven:maven-compat:3.0-beta-1"
-  compile "org.codehaus.plexus:plexus-container-default:1.5.4"
+  compile "org.codehaus.plexus:plexus-container-default:1.5.5"
   compile "org.codehaus.plexus:plexus-classworlds:2.2.3"
 
   //Maven plugins
@@ -72,11 +72,12 @@ dependencies {
   compile "org.apache.maven.wagon:wagon-webdav-jackrabbit:1.0-beta-6"
   compile "org.apache.maven.wagon:wagon-http-lightweight:1.0-beta-6"
 
-  //Gradle
-  compile gradleApi()
-
   //Utils
   compile "com.google.guava:guava:r07"
+
+  //Gradle Core APIs with a specific exclusion of maven-ant-tasks because it (older)
+  // provides DefaultPlexusContainer and conflicts with org.codehaus.plexus:plexus-container-default (newer)
+  compile gradleApi().source.filter { !it.name.startsWith("maven-ant-tasks") }
 }
 
 task wrapper(type: Wrapper) {
