@@ -41,6 +41,7 @@ import org.gradle.api.internal.artifacts.dependencies.DefaultProjectDependency;
 import org.gradle.api.internal.artifacts.dependencies.DefaultSelfResolvingDependency;
 import org.gradle.api.internal.artifacts.publish.ArchivePublishArtifact;
 import org.gradle.api.internal.project.AbstractProject;
+import org.gradle.api.internal.project.ProjectInternal;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.plugins.JavaPluginConvention;
 import org.gradle.api.tasks.SourceSet;
@@ -114,7 +115,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
         Configuration testCompile = configurations.findByName(TEST_COMPILE_CONFIGURATION);
         Set<org.gradle.api.artifacts.Dependency> testDependencies = new HashSet<org.gradle.api.artifacts.Dependency>();
         if (testCompile != null) {
-            testDependencies.addAll(testCompile.getDependencies());
+            testDependencies.addAll(testCompile.    getDependencies());
         }
         if (testRuntime != null) {
             testDependencies.addAll(testRuntime.getDependencies());
@@ -262,7 +263,7 @@ public class GradleM2MetadataPlugin implements Plugin<Project> {
                         // this is a concrete gradle project, it probably has parent in which the plugin is applied in subprojects closure
                         Set<Project> allProjects = new HashSet<Project>();
                         collectAllProjects(project, allProjects);
-                        Project projectDependency = find(allProjects, new Predicate<Project>() {
+                        ProjectInternal projectDependency = (ProjectInternal) find(allProjects, new Predicate<Project>() {
                             public boolean apply(Project input) {//input:project ':policy-client/1.0'
                                 return mavenModule.equals(input.getBuildDir().getParentFile());//project dir
                             }

@@ -34,7 +34,7 @@ artifacts {
 
 //If USER and PASSWORD are set on the project model via the CLI, set up an archive upload destination
 // Command line specification would look like: gradle -PUSER=matthew -PPASSWORD=foobar 
-if (project.metaClass.hasProperty(project, "USER")) {
+if (project.hasProperty("USER")) {
   println "Setting up the upload (destination) repository for this plugin"
   uploadArchives {
     repositories.mavenDeployer {
@@ -46,6 +46,14 @@ if (project.metaClass.hasProperty(project, "USER")) {
     }
   }
 }
+
+//uploadArchives {
+//    repositories {
+//        ivy {
+//            url "file://$buildDir/sharedRepo"
+//        }
+//    }
+//}
 
 repositories {
     mavenCentral()
@@ -80,6 +88,4 @@ dependencies {
   compile gradleApi().source.filter { !it.name.startsWith("maven-ant-tasks") }
 }
 
-task wrapper(type: Wrapper) {
-    gradleVersion = '1.0-milestone-4-20110508123756+0200'
-}
+task wrapper(type: Wrapper)
